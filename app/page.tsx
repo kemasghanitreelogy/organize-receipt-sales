@@ -46,7 +46,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [drag, setDrag] = useState(false);
-  const [needPassword, setNeedPassword] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const pickFile = useCallback((f: File | null) => {
@@ -78,19 +77,6 @@ export default function Home() {
     setProgress(null);
     const started = Date.now();
     try {
-      // 0) If the app is password-protected, check it BEFORE the slow OCR so the
-      //    user isn't asked for a password only after waiting.
-      const pw0 = typeof window !== "undefined" ? sessionStorage.getItem("appPw") || "" : "";
-      const auth = await fetch("/api/match", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-app-password": pw0 },
-        body: JSON.stringify({ inputs: [] }),
-      });
-      if (auth.status === 401) {
-        setNeedPassword(true);
-        throw new Error("This app is password-protected. Enter the access password and try again.");
-      }
-
       // 1) OCR entirely in the browser — the file never leaves this device.
       const { visuals, rows } = await extractFromFile(file, setProgress);
       const records = reconcile(rows, visuals) as VerifyRecord[];
@@ -105,10 +91,9 @@ export default function Home() {
         phoneLast4: r.phoneLast4 || "",
         shipDate,
       }));
-      const pw = typeof window !== "undefined" ? sessionStorage.getItem("appPw") || "" : "";
       const res = await fetch("/api/match", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-app-password": pw },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inputs }),
       });
       const raw = await res.text();
@@ -117,10 +102,6 @@ export default function Home() {
         data = JSON.parse(raw);
       } catch {
         throw new Error(`Shopify lookup failed (${res.status}).`);
-      }
-      if (res.status === 401) {
-        setNeedPassword(true);
-        throw new Error("This app is password-protected. Enter the access password and try again.");
       }
       if (!res.ok) throw new Error(data.error || "Shopify lookup failed.");
       const matches = data.matches || {};
@@ -208,28 +189,7 @@ export default function Home() {
           />
         </div>
 
-        <div className="controls" style={{ justifyContent: needPassword ? "space-between" : "flex-end" }}>
-          {needPassword && (
-            <div className="field" style={{ flex: 1, maxWidth: 320 }}>
-              <label>Access password</label>
-              <input
-                type="password"
-                placeholder="Enter password"
-                onChange={(e) => sessionStorage.setItem("appPw", e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
-                }}
-                style={{
-                  background: "var(--panel-2)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  padding: "9px 12px",
-                  fontSize: 14,
-                }}
-              />
-            </div>
-          )}
+        <div className="controls" style={{ justifyContent: "flex-end" }}>
           <button className="primary" disabled={!file || loading} onClick={submit}>
             {loading && <span className="spinner" />}
             {btnLabel}
