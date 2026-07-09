@@ -169,6 +169,7 @@ export type Record = {
   phoneLast4?: string; // from the label mask, used as a match key
   matchedOrder?: string | null;
   matchReasons?: string[];
+  matchStatus?: "shopify" | "manual" | null; // shopify = confident order match; manual = not in Shopify (e.g. WhatsApp order)
 };
 
 const FIELD_KEYS = [

@@ -17,6 +17,7 @@ export type VerifyRecord = {
   needsReview: boolean;
   matchedOrder?: string | null;
   matchReasons?: string[];
+  matchStatus?: "shopify" | "manual" | null;
 };
 
 const COLUMNS: { key: string; label: string }[] = [
@@ -61,15 +62,20 @@ export default function ReviewPanel({ records }: { records: VerifyRecord[] }) {
 
   const rows = () =>
     records.map((r) => {
-      const o: Record<string, string | number> = { page: r.page, verified: verified[r.page] ? "yes" : "no" };
+      const o: Record<string, string | number> = {
+        page: r.page,
+        source: r.matchStatus === "shopify" ? "Shopify" : "Manual/WA",
+        order: r.matchedOrder ?? "",
+        verified: verified[r.page] ? "yes" : "no",
+      };
       for (const c of COLUMNS) o[c.key] = edits[r.page]?.[c.key] ?? "";
       return o;
     });
 
   const downloadCsv = () => {
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const cols = ["page", ...COLUMNS.map((c) => c.key), "verified"];
-    const header = ["Page", ...COLUMNS.map((c) => c.label), "Verified"].map(esc).join(",");
+    const cols = ["page", ...COLUMNS.map((c) => c.key), "source", "order", "verified"];
+    const header = ["Page", ...COLUMNS.map((c) => c.label), "Source", "Order", "Verified"].map(esc).join(",");
     const body = rows().map((row) => cols.map((k) => esc(row[k])).join(","));
     download(new Blob([[header, ...body].join("\n")], { type: "text/csv" }), "labels-verified.csv");
   };
@@ -91,8 +97,8 @@ export default function ReviewPanel({ records }: { records: VerifyRecord[] }) {
         <div>
           <strong>{records.length}</strong> pages ·{" "}
           <span className="good">{records.filter((r) => r.fields.tracking_number?.confidence === "certain").length} AWB barcode-confirmed</span> ·{" "}
-          <span className="good">{records.filter((r) => r.fields.phone?.value && r.fields.phone?.confidence !== "low").length} phone matched</span> ·{" "}
-          <span className={toReviewCount ? "warn" : "good"}>{toReviewCount} need review</span> ·{" "}
+          <span className="good">{records.filter((r) => r.matchStatus === "shopify").length} Shopify phone</span> ·{" "}
+          <span className="warn">{records.filter((r) => r.matchStatus === "manual").length} manual/WA</span> ·{" "}
           {verifiedCount} verified
         </div>
         <div className="toolbar" style={{ margin: 0 }}>
@@ -140,12 +146,19 @@ export default function ReviewPanel({ records }: { records: VerifyRecord[] }) {
                 })}
               </div>
               <div className="card-actions">
-                {r.matchedOrder && (
-                  <div className="match-info">
-                    <span className="match-order">{r.matchedOrder}</span>
+                <div className="match-info">
+                  {r.matchStatus === "manual" ? (
+                    <span className="status-pill manual">Manual / WA</span>
+                  ) : (
+                    <>
+                      <span className="status-pill shopify">Shopify</span>
+                      {r.matchedOrder && <span className="match-order">{r.matchedOrder}</span>}
+                    </>
+                  )}
+                  {r.matchStatus !== "manual" && (
                     <span className="match-reasons">{(r.matchReasons || []).join(" · ")}</span>
-                  </div>
-                )}
+                  )}
+                </div>
                 <label className="verify-toggle">
                   <input type="checkbox" checked={isVer} onChange={(e) => setVerified((v) => ({ ...v, [r.page]: e.target.checked }))} />
                   Verified

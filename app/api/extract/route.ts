@@ -31,15 +31,26 @@ async function finalizeVerify(
 
   for (const r of records) {
     const m = matches.get(r.page);
-    if (m) {
-      r.fields.phone = { value: m.phone, source: m.phone ? "ocr" : "none", confidence: m.confidence, flag: m.flag };
+    if (m && m.confidence === "certain") {
+      // Confident Shopify match: fill clean contact from the order.
+      r.fields.phone = { value: m.phone, source: "ocr", confidence: "certain", flag: null };
       r.matchedOrder = m.orderName;
       r.matchReasons = m.reasons;
-      // For a certain match, trust Shopify's clean contact over noisy OCR.
-      if (m.confidence === "certain") {
-        if (m.name) r.fields.recipient_name = { value: m.name, source: "ocr", confidence: "certain", flag: null };
-        if (m.address) r.fields.recipient_address = { value: m.address, source: "ocr", confidence: "certain", flag: null };
-      }
+      r.matchStatus = "shopify";
+      if (m.name) r.fields.recipient_name = { value: m.name, source: "ocr", confidence: "certain", flag: null };
+      if (m.address) r.fields.recipient_address = { value: m.address, source: "ocr", confidence: "certain", flag: null };
+    } else {
+      // No confident match — do NOT surface a misleading guess. Mark it as a
+      // manual row (likely a direct/WhatsApp order not in Shopify).
+      r.fields.phone = {
+        value: null,
+        source: "none",
+        confidence: "low",
+        flag: "Not in Shopify — likely a direct/WhatsApp order. Enter phone manually.",
+      };
+      r.matchedOrder = null;
+      r.matchReasons = [];
+      r.matchStatus = "manual";
     }
     r.needsReview = Object.values(r.fields).some((f: any) => f.confidence === "low");
   }
