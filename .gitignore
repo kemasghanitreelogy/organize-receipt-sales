@@ -1,0 +1,41 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env — NEVER commit secrets
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# uploaded / working PDFs and images — contain customer PII, never commit
+/tmp
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# tesseract language data (downloaded at runtime)
+*.traineddata
+
+# dev server log
+dev.log
