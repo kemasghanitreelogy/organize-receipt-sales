@@ -7,6 +7,14 @@ export const runtime = "nodejs";
 // extracted recipients against Shopify (needs the secret Admin token). The
 // request/response are tiny, so it runs comfortably on any serverless free tier.
 export async function POST(req: NextRequest) {
+  // Optional access gate: if APP_PASSWORD is set, this endpoint (which can pull
+  // customer phone numbers from Shopify) requires a matching password header.
+  // Unset = open (e.g. for local use).
+  const gate = process.env.APP_PASSWORD;
+  if (gate && req.headers.get("x-app-password") !== gate) {
+    return NextResponse.json({ error: "Access password required or incorrect." }, { status: 401 });
+  }
+
   let body: { inputs?: MatchInput[] };
   try {
     body = await req.json();
