@@ -113,7 +113,9 @@ export async function renderAndDecode(
 ): Promise<PageVisual[]> {
   const dpi = opts.dpi ?? 400;
   const isImage = (opts.mimeType || "").startsWith("image/");
-  const worker = opts.withOcr ? await createWorker("ind+eng") : null;
+  // cachePath must be writable at runtime — containers (e.g. HF Spaces) may have
+  // a read-only working dir, so download the language data into /tmp.
+  const worker = opts.withOcr ? await createWorker("ind+eng", 1, { cachePath: "/tmp" }) : null;
   const visuals: PageVisual[] = [];
 
   try {

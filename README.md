@@ -1,3 +1,13 @@
+---
+title: Resi Data Extractor
+emoji: 📦
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # PDF → Text OCR
 
 Next.js app to upload an **image-based / scanned PDF** (text is inside images, so it

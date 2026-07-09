@@ -49,7 +49,7 @@ export async function runLocalOcr(pdfBytes: Buffer, dpi = 300): Promise<LocalRes
   const pdf: any = await getDocument({ data } as any).promise;
   const numPages: number = pdf.numPages;
 
-  const worker = await createWorker("ind+eng");
+  const worker = await createWorker("ind+eng", 1, { cachePath: "/tmp" });
   const pages: LocalPage[] = [];
   try {
     for (let n = 1; n <= numPages; n++) {
