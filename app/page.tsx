@@ -78,6 +78,19 @@ export default function Home() {
     setProgress(null);
     const started = Date.now();
     try {
+      // 0) If the app is password-protected, check it BEFORE the slow OCR so the
+      //    user isn't asked for a password only after waiting.
+      const pw0 = typeof window !== "undefined" ? sessionStorage.getItem("appPw") || "" : "";
+      const auth = await fetch("/api/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-app-password": pw0 },
+        body: JSON.stringify({ inputs: [] }),
+      });
+      if (auth.status === 401) {
+        setNeedPassword(true);
+        throw new Error("This app is password-protected. Enter the access password and try again.");
+      }
+
       // 1) OCR entirely in the browser — the file never leaves this device.
       const { visuals, rows } = await extractFromFile(file, setProgress);
       const records = reconcile(rows, visuals) as VerifyRecord[];
