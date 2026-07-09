@@ -80,16 +80,22 @@ async function finalizeVerify(
   });
 }
 
-// Labels print ship date as DD-MM-YYYY; normalize to ISO for date-proximity scoring.
+// Labels print ship date as DD-MM-YYYY; normalize to ISO. OCR of the year is
+// unreliable (e.g. 2026 → 2626) and the wrong date field can be picked, so we
+// reject implausible years and return "" — the matcher then falls back to a
+// recent-orders window instead of landing on an empty far-future window.
 function normalizeShipDate(raw: string | undefined): string {
-  if (!raw) return "2026-07-05";
-  const m = raw.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
-  if (m) {
-    const [, d, mo, y] = m;
-    const yr = y.length === 2 ? "20" + y : y;
-    return `${yr}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  if (raw) {
+    const m = raw.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+    if (m) {
+      const dd = +m[1], mm = +m[2];
+      const yr = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      if (yr >= 2023 && yr <= 2028 && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+        return `${yr}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      }
+    }
   }
-  return "2026-07-05";
+  return "";
 }
 
 export const runtime = "nodejs";

@@ -45,6 +45,7 @@ function extractZip(addr: string): string | null {
 
 function normalizeCourier(text: string): string | null {
   const u = text.toUpperCase();
+  if (u.includes("LION PARCEL") || u.includes("LIONPARCEL") || /\bLP\d{6,}/.test(u.replace(/\s/g, ""))) return "Lion Parcel";
   if (u.includes("GLOBAL JET") || u.includes("J&T") || /\bJET\b/.test(u)) return "J&T Express";
   if (u.includes("JNE")) return "JNE";
   if (u.includes("SICEPAT")) return "SiCepat";
@@ -58,31 +59,55 @@ export function parseLabelFields(rawText: string, page: number): ParsedRow {
   const lines = rawText.split("\n").map(scrub).filter(Boolean);
   const flat = lines.join(" ");
 
-  // Recipient block: from the "Penerima" line up to "Pengirim"/"BIAYA".
+  // Recipient block. Handles both templates:
+  //   • J&T   — "Penerima: NAME ****1234" then address on following lines.
+  //   • Lion  — "PENERIMA: NAME ****1234, full address … 15419" on one line.
+  // We build a block from the Penerima line + following lines up to a boundary,
+  // then split it at the masked phone: name is before, address is after.
   const penIdx = lines.findIndex((l) => /penerima/i.test(l));
   let recipient_name: string | null = null;
   let recipient_address: string | null = null;
   let recipient_phone_last4: string | null = null;
 
   if (penIdx >= 0) {
+    // The masked phone sits on the "Penerima" line itself (right after the name)
+    // for both templates — so look for it there only, never in later address
+    // lines (whose house numbers / postcodes would otherwise be mistaken for it).
     const penLine = lines[penIdx].replace(/.*penerima\s*:?/i, "").trim();
-    const digitGroups = penLine.match(/\d{3,4}/g);
-    if (digitGroups) recipient_phone_last4 = digitGroups[digitGroups.length - 1].slice(-4);
-    // Name = penLine minus the trailing "<mask-token> <digits>" tail.
-    let nm = penLine.replace(/\s*\S*\d{2,4}\s*$/, "").trim();
-    // Drop one trailing ALL-CAPS-noise token (OCR of the "****" mask) if the
-    // name still has 3+ tokens — real recipient names here are 1–2 words.
-    const parts = nm.split(/\s+/);
-    if (parts.length >= 3) parts.pop();
+    const pm = penLine.match(/\d{3,4}/);
+    if (pm) recipient_phone_last4 = pm[0].slice(-4);
+
+    // Name = penLine text before the mask ("****" or the first digit group).
+    let nm = penLine.split(/\*{2,}|\d{3,4}/)[0];
+    const parts = nm.split(/\s+/).filter(Boolean);
+    if (parts.length >= 3 && !/[*]/.test(nm)) parts.pop(); // drop trailing mask-noise word
     nm = parts.join(" ").replace(/[^A-Za-z .'-]/g, "").replace(/\s+/g, " ").trim();
     recipient_name = nm || null;
 
-    const addrLines: string[] = [];
-    for (let i = penIdx + 1; i < lines.length; i++) {
-      if (/pengirim|biaya|syarat|bayar|lebih praktis/i.test(lines[i])) break;
-      addrLines.push(lines[i]);
+    // Address = (rest of the Penerima line after the phone, for Lion's one-line
+    // format) + following lines (J&T's wrapped address), up to a boundary.
+    const addrParts: string[] = [];
+    if (pm) {
+      const after = penLine.slice(penLine.indexOf(pm[0]) + pm[0].length);
+      if (after.replace(/[\s,*.-]/g, "")) addrParts.push(after);
     }
-    recipient_address = addrLines.join(", ").replace(/\s+/g, " ").trim() || null;
+    for (let i = penIdx + 1; i < lines.length && addrParts.length < 6; i++) {
+      if (/pengirim|biaya|total|syarat|bayar|kota tujuan|lacak|estimasi|dibuat|berat|lebih praktis|ditagihkan/i.test(lines[i]))
+        break;
+      addrParts.push(lines[i]);
+    }
+    recipient_address =
+      addrParts
+        .join(", ")
+        .replace(/\d+\s*x\s*\d+\s*x\s*\d+\s*cm/gi, "")
+        .replace(/\bCW\s*:?\s*[\d.]+\s*kg/gi, "")
+        .replace(/\b[\d.]+\s*kg\b/gi, "")
+        .replace(/\b\d+\s*\/\s*\d+\b/g, "")
+        .replace(/^[\s,*.-]+/, "")
+        .replace(/[\s,]+$/, "")
+        .replace(/(,\s*)+/g, ", ")
+        .replace(/\s+/g, " ")
+        .trim() || null;
   }
 
   // Sender (Pengirim) — usually TREELOGY; capture for completeness.
@@ -107,12 +132,14 @@ export function parseLabelFields(rawText: string, page: number): ParsedRow {
     courier: normalizeCourier(flat),
     sender_name,
     sender_address: null,
-    shipping_cost: pick(/(IDR\s*[\d.,]+)/i, flat),
+    shipping_cost: pick(/((?:IDR|Rp)\s*[\d.,]+)/i, flat),
     weight: pick(/([\d.]+\s*KG)/i, flat),
     payment_method: pick(/\b(TUNAI|NON TUNAI|COD)\b/i, flat),
     item: pick(/Barang\s*:?\s*([A-Za-z][A-Za-z ]+)/i, flat),
     notes: pick(/Notes?\s*:?\s*([A-Za-z]{2,})/i, flat),
-    ship_date: pick(/(?:Ship|Cetak)\s*:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i, flat) || pick(/(\d{2}-\d{2}-\d{4})/, flat),
+    ship_date:
+      pick(/(?:Ship|Cetak|Dibuat)\s*:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i, flat) ||
+      pick(/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/, flat),
   };
 }
 

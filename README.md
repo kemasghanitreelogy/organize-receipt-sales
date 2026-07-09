@@ -23,6 +23,10 @@ scans. Claiming "100% from one model" is false. Real ~100% accuracy comes from a
 
 Verify mode (Gemini engine → Output → "Verify & extract") does exactly that, per page:
 
+Supports multiple courier templates — **J&T Express** (`JD…` AWB) and **Lion Parcel**
+(`…LP…` AWB) — auto-detected from the barcode and logo. Add more couriers by extending the
+AWB pattern in `app/lib/verify.ts` and the courier map in `app/lib/localExtract.ts`.
+
 1. **Barcode / QR ground-truth.** The label's Code-128 + Code-39 barcodes are decoded
    with `zxing-wasm` and cross-confirmed against each other. The tracking number is
    therefore **exact — no OCR error is possible** — at **zero extra token cost**.

@@ -19,7 +19,9 @@ export type PageVisual = {
   ocrText?: string; // raw Tesseract text (only when withOcr = true)
 };
 
-const JD = /JD\d{8,}/;
+// Known airwaybill formats — J&T (JD…), Lion Parcel (…LP…). Extend here as new
+// couriers are added. The barcode text must match one of these to count as an AWB.
+const AWB_RE = /(JD\d{8,}|\d{0,3}LP\d{8,})/i;
 
 async function decodeRegion(
   fullCanvas: any,
@@ -40,7 +42,10 @@ async function decodeRegion(
       { data: id.data, width: cw, height: ch } as any,
       { formats: ["Code128", "Code39", "ITF", "QRCode", "DataMatrix"], tryHarder: true, maxNumberOfSymbols: 20 },
     );
-    return res.map((r: any) => (r.text || "").trim()).filter((t: string) => JD.test(t));
+    return res
+      .map((r: any) => (r.text || "").trim())
+      .map((t: string) => (t.match(AWB_RE) ? t.match(AWB_RE)![0].toUpperCase() : ""))
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -50,13 +55,15 @@ async function decodePage(fullCanvas: any): Promise<string[]> {
   const W = fullCanvas.width;
   const H = fullCanvas.height;
   const found: string[] = [];
-  // The label lives in the top-left ~42% x ~40% of the page. Scan several bands
-  // and scales so slight template shifts between pages don't break decoding.
+  // Scan several bands/scales so different courier templates (J&T occupies the
+  // top-left quadrant; Lion Parcel spans the top ~55% at full width) all decode.
   const regions: [number, number, number, number, number][] = [
-    [0.01, 0.045, 0.3, 0.075, 2], // top Code128 band
-    [0.0, 0.3, 0.42, 0.08, 2], // bottom Code39 band
-    [0.0, 0.0, 0.42, 0.4, 1.5], // whole label, fallback
-    [0.0, 0.0, 0.42, 0.4, 1], // whole label, native
+    [0.01, 0.045, 0.3, 0.075, 2], // J&T top Code128 band
+    [0.0, 0.3, 0.42, 0.08, 2], // J&T bottom Code39 band
+    [0.0, 0.1, 0.72, 0.09, 2], // Lion top barcode band (wider)
+    [0.0, 0.0, 0.75, 0.55, 1], // Lion whole label
+    [0.0, 0.0, 0.42, 0.4, 1.5], // J&T whole label, upscaled
+    [0.0, 0.0, 0.42, 0.4, 1], // J&T whole label, native
   ];
   for (const [rx, ry, rw, rh, scale] of regions) {
     const codes = await decodeRegion(
@@ -185,27 +192,15 @@ function mkField(value: string | null, source: Field["source"], confidence: Fiel
 // Per-field validators return a flag string if invalid, else null.
 function validate(key: string, value: string | null): string | null {
   const v = (value ?? "").trim();
+  // The deliverable is Courier · AWB · Phone. AWB is barcode-certain and the
+  // phone drives review via the Shopify match, so secondary OCR fields
+  // (order code, cost, weight, service) are informational and never force a
+  // review — they vary by courier and shouldn't flag an otherwise-clean row.
   if (!v) {
-    // These fields are essential; missing = review.
-    if (["order_code", "recipient_name", "recipient_address", "shipping_cost", "weight"].includes(key))
-      return "missing";
+    if (key === "recipient_name") return "missing";
     return null;
   }
-  switch (key) {
-    case "shipping_cost":
-      return /\d/.test(v) && /idr|rp/i.test(v) ? null : "unexpected format";
-    case "weight":
-      return /[\d.]+\s*kg/i.test(v) ? null : "unexpected format";
-    case "recipient_address":
-      return /\b\d{5}\b/.test(v) ? null : "no 5-digit postcode";
-    case "service_code":
-      return v.length <= 8 ? null : "unexpected";
-    case "recipient_name":
-    case "sender_name":
-      return /^[A-Za-z][A-Za-z .'-]*$/.test(v) ? null : "contains odd characters";
-    default:
-      return null;
-  }
+  return null;
 }
 
 export function reconcile(geminiRows: any[], visuals: PageVisual[]): Record[] {

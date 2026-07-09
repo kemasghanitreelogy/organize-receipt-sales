@@ -73,8 +73,8 @@ const POOL_QUERY = `query Pool($q: String!, $c: String) {
 }`;
 
 async function fetchPool(store: string, token: string, shipDate: string): Promise<PoolOrder[]> {
-  const from = new Date(+new Date(shipDate) - 21 * 86400000).toISOString().slice(0, 10);
-  const to = new Date(+new Date(shipDate) + 3 * 86400000).toISOString().slice(0, 10);
+  const from = new Date(+new Date(shipDate) - 30 * 86400000).toISOString().slice(0, 10);
+  const to = new Date(+new Date(shipDate) + 10 * 86400000).toISOString().slice(0, 10);
   const q = `created_at:>=${from} created_at:<=${to}`;
   const pool: PoolOrder[] = [];
   let cursor: string | null = null;
