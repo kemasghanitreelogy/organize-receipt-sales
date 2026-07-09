@@ -1,24 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { LabelRecord } from "../lib/labelCore";
 
-export type Field = {
-  value: string | null;
-  source: "barcode" | "shopify" | "ocr" | "none";
-  confidence: "certain" | "high" | "low";
-  flag: string | null;
-};
-
-export type VerifyRecord = {
-  page: number;
-  fields: { [k: string]: Field };
-  barcodes: string[];
-  thumbnail: string;
-  needsReview: boolean;
-  matchedOrder?: string | null;
-  matchReasons?: string[];
-  matchStatus?: "shopify" | "manual" | null;
-};
+export type VerifyRecord = LabelRecord;
 
 const COLUMNS: { key: string; label: string }[] = [
   { key: "courier", label: "Courier" },
