@@ -87,8 +87,17 @@ export default function Home() {
       fd.append("provider", "local");
       fd.append("mode", "verify");
       const res = await fetch("/api/extract", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Extraction failed.");
+      const raw = await res.text();
+      let data: (Result & { error?: string }) | null = null;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        // Non-JSON response — usually a platform-level error page, not our API.
+        if (res.status === 413) throw new Error("File too large for the server. On Vercel the limit is ~4.5MB per request; run locally for big PDFs or split the file.");
+        if (res.status === 504 || res.status === 408) throw new Error("Processing timed out on the server. This on-device OCR runs best locally or on a container host, not serverless.");
+        throw new Error(`Server error (${res.status}). ${raw.slice(0, 140)}`);
+      }
+      if (!res.ok) throw new Error(data?.error || "Extraction failed.");
       setResult(data as Result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Extraction failed.");
@@ -298,10 +307,10 @@ export default function Home() {
       )}
 
       <p className="note">
-        Token strategy: the raw PDF is sent to Gemini (billed a flat ~258 tokens/page instead of
-        ~1,500+ if rasterized to hi-res images), <code>thinkingBudget: 0</code> keeps thinking
-        tokens at 0, and the prompt is minimal with plain-text output. Your API key stays
-        server-side.
+        How it works: each page is rendered on-device, the AWB is decoded from the barcode
+        (exact, no OCR error), the label is read with Tesseract, and the recipient is matched
+        against your Shopify orders (name + postcode + phone last-4) to pull the phone number.
+        Nothing is sent to any AI service — no API key, no quota, no cost.
       </p>
     </div>
   );
