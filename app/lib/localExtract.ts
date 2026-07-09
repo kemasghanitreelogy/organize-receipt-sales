@@ -36,6 +36,18 @@ const pick = (re: RegExp, text: string, group = 1): string | null => {
   return m ? (m[group] ?? m[0]).trim() : null;
 };
 
+// Drop dates whose OCR'd year is implausible (e.g. 2026 → 2626) so the UI never
+// shows an obviously wrong date.
+function sanitizeDate(d: string | null): string | null {
+  if (!d) return null;
+  const y = d.match(/(\d{4})\s*$/);
+  if (y) {
+    const yr = +y[1];
+    if (yr < 2023 || yr > 2028) return null;
+  }
+  return d;
+}
+
 // Last 5-digit run that ends at a non-digit boundary → the postcode
 // (handles "5117510" → "17510" where a stray barcode digit prefixes it).
 function extractZip(addr: string): string | null {
@@ -78,9 +90,13 @@ export function parseLabelFields(rawText: string, page: number): ParsedRow {
     if (pm) recipient_phone_last4 = pm[0].slice(-4);
 
     // Name = penLine text before the mask ("****" or the first digit group).
+    // Only drop a trailing token as mask-noise when the mask was OCR'd as a word
+    // (no visible "****") — otherwise a genuine 3-word name would lose its last
+    // word.
+    const hadStars = /\*{2,}/.test(penLine);
     let nm = penLine.split(/\*{2,}|\d{3,4}/)[0];
     const parts = nm.split(/\s+/).filter(Boolean);
-    if (parts.length >= 3 && !/[*]/.test(nm)) parts.pop(); // drop trailing mask-noise word
+    if (parts.length >= 3 && !hadStars) parts.pop();
     nm = parts.join(" ").replace(/[^A-Za-z .'-]/g, "").replace(/\s+/g, " ").trim();
     recipient_name = nm || null;
 
@@ -135,11 +151,12 @@ export function parseLabelFields(rawText: string, page: number): ParsedRow {
     shipping_cost: pick(/((?:IDR|Rp)\s*[\d.,]+)/i, flat),
     weight: pick(/([\d.]+\s*KG)/i, flat),
     payment_method: pick(/\b(TUNAI|NON TUNAI|COD)\b/i, flat),
-    item: pick(/Barang\s*:?\s*([A-Za-z][A-Za-z ]+)/i, flat),
+    item: pick(/Barang\s*:?\s*([A-Za-z]+(?:\s[A-Za-z]+)?)/i, flat),
     notes: pick(/Notes?\s*:?\s*([A-Za-z]{2,})/i, flat),
-    ship_date:
+    ship_date: sanitizeDate(
       pick(/(?:Ship|Cetak|Dibuat)\s*:?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i, flat) ||
-      pick(/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/, flat),
+        pick(/(\d{1,2}[-/]\d{1,2}[-/]\d{4})/, flat),
+    ),
   };
 }
 

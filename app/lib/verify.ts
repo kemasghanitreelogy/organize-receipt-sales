@@ -118,10 +118,18 @@ export async function renderAndDecode(
 
   try {
     if (isImage) {
-      // Load the image and upscale so barcodes/tiny text stay legible — match
-      // the ~3400px width the PDF path renders at (400 DPI on a letter page).
-      const img = await loadImage(bytes);
-      const scale = img.width && img.width < 3400 ? 3400 / img.width : 1;
+      // Load the image and normalize its width into [3400, 4400]px: upscale small
+      // photos so barcodes/tiny text stay legible, and cap huge phone photos so
+      // OCR stays fast and within memory.
+      let img;
+      try {
+        img = await loadImage(bytes);
+      } catch {
+        throw new Error("Could not read that image. Please upload a PDF, PNG, or JPG.");
+      }
+      if (!img.width || !img.height) throw new Error("The image appears to be empty or corrupt.");
+      const targetW = Math.min(4400, Math.max(3400, img.width));
+      const scale = targetW / img.width;
       const canvas = createCanvas(Math.round(img.width * scale), Math.round(img.height * scale));
       const ictx = canvas.getContext("2d");
       ictx.fillStyle = "#fff";
@@ -161,7 +169,7 @@ export async function renderAndDecode(
 
 export type Field = {
   value: string | null;
-  source: "barcode" | "ocr" | "none";
+  source: "barcode" | "shopify" | "ocr" | "none";
   confidence: "certain" | "high" | "low";
   flag: string | null; // human-readable reason it needs review, or null
 };

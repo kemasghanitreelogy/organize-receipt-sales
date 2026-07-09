@@ -158,17 +158,40 @@ function matchAgainstPool(inp: MatchInput, pool: PoolOrder[]): MatchResult {
   const hasZip = bestReasons.some((r) => r.startsWith("postcode"));
   const hasName = bestReasons.some((r) => r.startsWith("name"));
 
+  // If the label DID show a phone last-4 and it does NOT match this order's
+  // phone, the order almost certainly belongs to a different person (same name /
+  // area, different number) — never call that certain, even with name + zip.
+  const phoneContradicts =
+    inp.phoneLast4.length >= 3 && !!best.phone && !phoneTail(best.phone, inp.phoneLast4);
+
   // The recipient NAME is the identity anchor: postcode + fuzzy-phone can
-  // coincide for a different person (e.g. when the true order is outside the
-  // date window), so a match is only "certain" when the name agrees AND a hard
-  // key confirms it — OR when the digit evidence is exceptionally strong
-  // (exact phone last-4 AND exact postcode), which is unlikely to collide.
+  // coincide for a different person, so a match is only "certain" when the name
+  // agrees AND a hard key confirms it — OR when the digit evidence is
+  // exceptionally strong (exact phone last-4 AND exact postcode).
   let confidence: MatchResult["confidence"];
   let flag: string | null = null;
-  if (hasName && (phoneFuzzy || hasZip)) {
+  if (phoneContradicts) {
+    confidence = "low";
+    flag = "phone last-4 differs from this order — verify against label";
+  } else if (hasName && phoneFuzzy) {
+    // Name + phone last-4 (exact or ≤1 edit): the phone is near-unique → certain.
     confidence = "certain";
   } else if (phoneExact && hasZip) {
+    // Exact phone + exact postcode: strong even if the OCR name is garbled.
     confidence = "certain";
+  } else if (hasName && hasZip) {
+    // Name + postcode but NO phone confirmation. Safe only if it's the unique
+    // name-in-that-area — otherwise two same-name neighbours could be confused.
+    const dupes = pool.filter((o) => {
+      const shared = [...inTokens].filter((t) => nameTokens(o.shipName).has(t)).length;
+      return shared >= 1 && !!inp.zip && o.zip === inp.zip;
+    }).length;
+    if (dupes <= 1) {
+      confidence = "certain";
+    } else {
+      confidence = "low";
+      flag = "multiple orders match this name + area — verify against label";
+    }
   } else {
     confidence = "low";
     flag = hasName || phoneFuzzy || hasZip ? "single-signal match — verify against label" : "weak match — verify";

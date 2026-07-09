@@ -33,12 +33,12 @@ async function finalizeVerify(
     const m = matches.get(r.page);
     if (m && m.confidence === "certain") {
       // Confident Shopify match: fill clean contact from the order.
-      r.fields.phone = { value: m.phone, source: "ocr", confidence: "certain", flag: null };
+      r.fields.phone = { value: m.phone, source: "shopify", confidence: "certain", flag: null };
       r.matchedOrder = m.orderName;
       r.matchReasons = m.reasons;
       r.matchStatus = "shopify";
-      if (m.name) r.fields.recipient_name = { value: m.name, source: "ocr", confidence: "certain", flag: null };
-      if (m.address) r.fields.recipient_address = { value: m.address, source: "ocr", confidence: "certain", flag: null };
+      if (m.name) r.fields.recipient_name = { value: m.name, source: "shopify", confidence: "certain", flag: null };
+      if (m.address) r.fields.recipient_address = { value: m.address, source: "shopify", confidence: "certain", flag: null };
     } else {
       // No confident match — do NOT surface a misleading guess. Mark it as a
       // manual row (likely a direct/WhatsApp order not in Shopify).

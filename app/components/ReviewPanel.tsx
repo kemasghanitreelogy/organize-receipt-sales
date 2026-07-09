@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 export type Field = {
   value: string | null;
-  source: "barcode" | "ocr" | "none";
+  source: "barcode" | "shopify" | "ocr" | "none";
   confidence: "certain" | "high" | "low";
   flag: string | null;
 };
@@ -129,11 +129,13 @@ export default function ReviewPanel({ records }: { records: VerifyRecord[] }) {
                   const f = r.fields[c.key];
                   const low = f?.confidence === "low";
                   const certain = f?.confidence === "certain";
+                  const badgeText =
+                    f?.source === "barcode" ? "barcode ✓" : f?.source === "shopify" ? "Shopify ✓" : null;
                   return (
                     <div className="field-row" key={c.key}>
                       <label>
                         {c.label}
-                        {certain && <span className="badge bc">barcode ✓</span>}
+                        {certain && badgeText && <span className="badge bc">{badgeText}</span>}
                         {f?.flag && <span className="badge warn-badge">{f.flag}</span>}
                       </label>
                       <input
