@@ -39,3 +39,4 @@ yarn-error.log*
 
 # dev server log
 dev.log
+.vercel

@@ -52,15 +52,16 @@ function lev(a: string, b: string): number {
   return d[m][n];
 }
 
-// Does the order phone end in the label's last-4 (exact or 1-edit fuzzy)?
+// Does the order phone end in the label's last-4 (exact, or 1-edit fuzzy on the
+// TAIL only)? Comparing just the last four digits — not any 4-digit window in
+// the middle of the number — prevents a coincidental interior match (e.g. label
+// "3555" vs a different person's "…3155 88") from looking like a phone hit.
 function phoneTail(phone: string, last4: string): "exact" | "fuzzy" | null {
-  if (!phone || !last4) return null;
+  if (!phone || last4.length < 3) return null;
   const p = digits(phone);
-  const t = last4.padStart(4, "0").slice(-4);
+  if (p.length < last4.length) return null;
   if (p.endsWith(last4)) return "exact";
-  for (let i = Math.max(0, p.length - 6); i <= p.length - t.length; i++) {
-    if (lev(p.slice(i, i + t.length), t) <= 1) return "fuzzy";
-  }
+  if (lev(p.slice(-last4.length), last4) <= 1) return "fuzzy";
   return null;
 }
 
