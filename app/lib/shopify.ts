@@ -22,6 +22,7 @@ export type MatchResult = {
   city: string | null;
   zip: string | null;
   orderName: string | null;
+  legacyId: string | null; // Shopify numeric order id (= Jubelio ref_no)
   confidence: "certain" | "high" | "low";
   reasons: string[];
   flag: string | null;
@@ -36,7 +37,7 @@ export type MatchInput = {
   shipDate: string; // ISO
 };
 
-type PoolOrder = { orderName: string; createdAt: string; shipName: string; address: string; city: string; zip: string; phone: string };
+type PoolOrder = { orderName: string; legacyId: string; createdAt: string; shipName: string; address: string; city: string; zip: string; phone: string };
 
 const digits = (s: string | null) => (s || "").replace(/\D/g, "");
 const nameTokens = (s: string) =>
@@ -68,7 +69,7 @@ function phoneTail(phone: string, last4: string): "exact" | "fuzzy" | null {
 const POOL_QUERY = `query Pool($q: String!, $c: String) {
   orders(first: 100, after: $c, query: $q, sortKey: CREATED_AT, reverse: true) {
     pageInfo { hasNextPage endCursor }
-    edges { node { name createdAt shippingAddress { name address1 city province zip phone } } }
+    edges { node { name legacyResourceId createdAt shippingAddress { name address1 city province zip phone } } }
   }
 }`;
 
@@ -92,6 +93,7 @@ async function fetchPool(store: string, token: string, shipDate: string): Promis
       const a = e.node.shippingAddress ?? {};
       pool.push({
         orderName: e.node.name,
+        legacyId: String(e.node.legacyResourceId ?? ""),
         createdAt: e.node.createdAt,
         shipName: a.name ?? "",
         address: [a.address1, a.city, a.province, a.zip].filter(Boolean).join(", "),
@@ -150,7 +152,7 @@ function matchAgainstPool(inp: MatchInput, pool: PoolOrder[]): MatchResult {
   }
 
   if (!best || bestScore <= 0) {
-    return { phone: null, name: null, address: null, city: null, zip: null, orderName: null, confidence: "low", reasons: [], flag: "no matching order", candidateCount: pool.length };
+    return { phone: null, name: null, address: null, city: null, zip: null, orderName: null, legacyId: null, confidence: "low", reasons: [], flag: "no matching order", candidateCount: pool.length };
   }
 
   const phoneExact = bestReasons.includes("phone-4 ✓");
@@ -204,6 +206,7 @@ function matchAgainstPool(inp: MatchInput, pool: PoolOrder[]): MatchResult {
     city: best.city || null,
     zip: best.zip || null,
     orderName: best.orderName,
+    legacyId: best.legacyId || null,
     confidence,
     reasons: bestReasons,
     flag,
@@ -217,7 +220,7 @@ export async function matchAll(inputs: MatchInput[]): Promise<Map<number, MatchR
   const out = new Map<number, MatchResult>();
   if (!store || !token) {
     for (const i of inputs)
-      out.set(i.page, { phone: null, name: null, address: null, city: null, zip: null, orderName: null, confidence: "low", reasons: [], flag: "Shopify not configured", candidateCount: 0 });
+      out.set(i.page, { phone: null, name: null, address: null, city: null, zip: null, orderName: null, legacyId: null, confidence: "low", reasons: [], flag: "Shopify not configured", candidateCount: 0 });
     return out;
   }
   const shipDate = inputs.find((i) => i.shipDate)?.shipDate || new Date().toISOString().slice(0, 10);
@@ -227,7 +230,7 @@ export async function matchAll(inputs: MatchInput[]): Promise<Map<number, MatchR
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Shopify error";
     for (const i of inputs)
-      out.set(i.page, { phone: null, name: null, address: null, city: null, zip: null, orderName: null, confidence: "low", reasons: [], flag: msg, candidateCount: 0 });
+      out.set(i.page, { phone: null, name: null, address: null, city: null, zip: null, orderName: null, legacyId: null, confidence: "low", reasons: [], flag: msg, candidateCount: 0 });
     return out;
   }
   for (const inp of inputs) out.set(inp.page, matchAgainstPool(inp, pool));

@@ -26,6 +26,7 @@ export type LabelRecord = {
   matchedOrder?: string | null;
   matchReasons?: string[];
   matchStatus?: "shopify" | "manual" | null;
+  legacyId?: string | null; // Shopify numeric order id, for the Jubelio link
 };
 
 // Known airwaybill formats — J&T (JD…), Lion Parcel (…LP…). Extend as needed.

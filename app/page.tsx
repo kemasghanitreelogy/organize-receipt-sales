@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import ReviewPanel, { VerifyRecord } from "./components/ReviewPanel";
+import JubelioPanel from "./components/JubelioPanel";
 import { extractFromFile, type Progress } from "./lib/browserOcr";
 import { reconcile } from "./lib/labelCore";
 
@@ -19,6 +20,7 @@ type MatchResult = {
   name: string | null;
   address: string | null;
   orderName: string | null;
+  legacyId: string | null;
   confidence: "certain" | "high" | "low";
   reasons: string[];
   flag: string | null;
@@ -114,6 +116,7 @@ export default function Home() {
           r.matchedOrder = m.orderName;
           r.matchReasons = m.reasons;
           r.matchStatus = "shopify";
+          r.legacyId = m.legacyId;
           if (m.name) r.fields.recipient_name = { value: m.name, source: "shopify", confidence: "certain", flag: null };
           if (m.address) r.fields.recipient_address = { value: m.address, source: "shopify", confidence: "certain", flag: null };
         } else {
@@ -229,6 +232,8 @@ export default function Home() {
           <ReviewPanel records={result.records} />
         </div>
       )}
+
+      {result && <JubelioPanel records={result.records} />}
 
       <p className="note">
         On-device OCR: pages are rendered and read in your browser (pdf.js + Tesseract + barcode
